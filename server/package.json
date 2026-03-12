@@ -1,0 +1,35 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "nodemon --watch src --exec ts-node src/index.ts",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:seed": "ts-node prisma/seed.ts",
+    "check": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.3.5",
+    "nodemon": "^3.1.14",
+    "prisma": "^6.19.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.2",
+    "@types/express-session": "^1.18.2",
+    "@types/morgan": "^1.9.10",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "morgan": "^1.10.1"
+  }
+}
