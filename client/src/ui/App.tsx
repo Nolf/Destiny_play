@@ -12,24 +12,40 @@ type Match = {
   scoreB: number;
 };
 
-type SummaryRow = {
-  name: string;
-  played: number;
-  wins: number;
-  losses: number;
-  draws: number;
-  scored: number;
-  conceded: number;
-};
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
-const API_BASE = "http://localhost:4000";
+const TEAM_ROSTER: { team: string; members: string[] }[] = [
+  {
+    team: "청팀",
+    members: ["임창용", "이종현", "정현석", "이경하", "조음정", "김재형"],
+  },
+  {
+    team: "홍팀",
+    members: ["박성창", "박성찬", "최우임", "김유나", "김혜원", "김영준"],
+  },
+];
+
+type ScheduleRow =
+  | { type: "event"; time: string; duration: number; label: string }
+  | { type: "match"; round: string; time: string; duration: number };
+
+const SCHEDULE_ROWS: ScheduleRow[] = [
+  { type: "event", time: "11:00 ~ 11:25", duration: 25, label: "마니또추첨 + 라켓빼기" },
+  { type: "match", round: "R1", time: "11:25 ~ 11:50", duration: 25 },
+  { type: "match", round: "R2", time: "11:50 ~ 12:15", duration: 25 },
+  { type: "match", round: "R3", time: "12:15 ~ 12:40", duration: 25 },
+  { type: "match", round: "R4", time: "12:40 ~ 13:05", duration: 25 },
+  { type: "match", round: "R5", time: "13:05 ~ 13:30", duration: 25 },
+  { type: "match", round: "R6", time: "13:30 ~ 13:55", duration: 25 },
+  { type: "event", time: "13:55 ~ 14:00", duration: 5, label: "대회시상 및 마무리" },
+];
 
 export const App: React.FC = () => {
   const [me, setMe] = useState<string | null>(null);
   const [loginName, setLoginName] = useState("");
   const [matches, setMatches] = useState<Match[]>([]);
-  const [summary, setSummary] = useState<SummaryRow[]>([]);
   const [voteTarget, setVoteTarget] = useState("");
+  const [myVote, setMyVote] = useState<string | null>(null);
   const [voteSummary, setVoteSummary] = useState<{ targetName: string; count: number }[]>([]);
 
   useEffect(() => {
@@ -44,8 +60,20 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (!me) return;
     loadMatches();
-    loadSummary();
     loadVoteSummary();
+    loadMyVote();
+  }, [me]);
+
+  useEffect(() => {
+    if (!me) return;
+    const timerId = window.setInterval(() => {
+      loadVoteSummary();
+      loadMyVote();
+    }, 5000);
+
+    return () => {
+      window.clearInterval(timerId);
+    };
   }, [me]);
 
   const loadMatches = async () => {
@@ -53,14 +81,18 @@ export const App: React.FC = () => {
     if (res.ok) setMatches(await res.json());
   };
 
-  const loadSummary = async () => {
-    const res = await fetch(`${API_BASE}/api/summary`, { credentials: "include" });
-    if (res.ok) setSummary(await res.json());
-  };
-
   const loadVoteSummary = async () => {
     const res = await fetch(`${API_BASE}/api/votes/summary`, { credentials: "include" });
     if (res.ok) setVoteSummary(await res.json());
+  };
+
+  const loadMyVote = async () => {
+    const res = await fetch(`${API_BASE}/api/votes/me`, { credentials: "include" });
+    if (res.ok) {
+      const data = await res.json();
+      setMyVote(data.targetName ?? null);
+      if (data.targetName) setVoteTarget(data.targetName);
+    }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -99,222 +131,484 @@ export const App: React.FC = () => {
       credentials: "include",
       body: JSON.stringify({ scoreA: match.scoreA, scoreB: match.scoreB }),
     });
-    await loadSummary();
   };
 
-  const handleVote = async () => {
-    if (!voteTarget) return;
+  const handleVote = async (target: string) => {
+    if (!target) return;
+    setVoteTarget(target);
+    setMyVote(target);
     await fetch(`${API_BASE}/api/votes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ targetName: voteTarget }),
+      body: JSON.stringify({ targetName: target }),
     });
     await loadVoteSummary();
   };
 
+  const handleResetVotes = async () => {
+    const res = await fetch(`${API_BASE}/api/votes/reset`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) return;
+
+    setVoteTarget("");
+    setMyVote(null);
+    setVoteSummary([]);
+    await loadVoteSummary();
+    await loadMyVote();
+  };
+
+  const handleReenter = async () => {
+    await fetch(`${API_BASE}/api/logout`, { method: "POST", credentials: "include" }).catch(() => {});
+    setMatches([]);
+    setVoteTarget("");
+    setMyVote(null);
+    setVoteSummary([]);
+    setLoginName(me ?? "");
+    setMe(null);
+  };
+
   if (!me) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-sky-900 flex items-center justify-center text-slate-50">
-        <div className="relative max-w-xl w-full px-8 py-10 rounded-3xl bg-slate-900/70 border border-slate-700/60 shadow-[0_18px_60px_rgba(15,23,42,0.9)] backdrop-blur-2xl">
-          <div className="absolute -top-10 -left-10 h-24 w-24 rounded-3xl bg-sky-500/40 blur-xl" />
-          <div className="absolute -bottom-12 -right-8 h-32 w-32 rounded-full bg-emerald-400/40 blur-2xl" />
+      <div
+        className="relative min-h-screen flex items-start sm:items-center justify-center px-[0.65rem] sm:px-4 pt-0 pb-16 sm:py-10 overflow-hidden"
+        style={{ background: "linear-gradient(145deg, #d6cdea 0%, #cec4e5 45%, #c7bddf 100%)" }}
+      >
+        <div className="pointer-events-none absolute inset-0">
+          <div
+            className="absolute -top-28 -left-24 w-[28rem] h-[28rem] rounded-full opacity-35"
+            style={{ background: "radial-gradient(circle, rgba(255,255,255,0.88) 0%, rgba(255,255,255,0) 72%)" }}
+          />
+          <div
+            className="absolute -bottom-32 -right-28 w-[24rem] h-[24rem] rounded-full opacity-30"
+            style={{ background: "radial-gradient(circle, rgba(179,160,219,0.85) 0%, rgba(179,160,219,0) 72%)" }}
+          />
+        </div>
 
-          <div className="relative space-y-6">
-            <div>
-              <p className="text-xs tracking-[0.2em] uppercase text-sky-300/80">Tennis Club Event 2026</p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-50">
-                Destiny Doubles
-                <span className="block text-base font-normal text-slate-300/80">
-                  오늘 경기 &amp; 마니또 대시보드
-                </span>
-              </h1>
+        <div
+          className="relative w-[96vw] sm:w-full max-w-[860px] rounded-[38px] overflow-hidden origin-center scale-[0.82] sm:scale-[0.68] md:scale-[0.75]"
+          style={{
+            background: "linear-gradient(160deg, rgba(255,255,255,0.64) 0%, rgba(240,235,250,0.72) 100%)",
+            border: "1px solid rgba(232,223,249,0.95)",
+            boxShadow: "0 26px 55px rgba(84,57,143,0.22), 0 1px 0 rgba(255,255,255,0.85) inset",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          <div
+            className="relative px-4 sm:px-5 md:px-12 py-8 md:py-10"
+            style={{
+              background:
+                "radial-gradient(120% 110% at 0% 0%, rgba(255,255,255,0.82) 0%, rgba(255,255,255,0) 56%), linear-gradient(145deg, rgba(235,227,248,0.9) 0%, rgba(225,215,244,0.7) 100%)",
+              borderBottom: "1px solid rgba(207,191,235,0.7)",
+            }}
+          >
+            <div className="pointer-events-none absolute inset-0 opacity-[0.26]"
+              style={{
+                background: "repeating-radial-gradient(circle at 0 0, rgba(130,103,185,0.2) 0 18px, transparent 18px 54px)",
+              }}
+            />
+            <div className="pointer-events-none absolute top-7 right-8 w-14 h-14 opacity-40"
+              style={{ background: "radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 72%)" }}
+            />
+            <div className="pointer-events-none absolute bottom-8 right-24 w-10 h-10 opacity-35"
+              style={{ background: "radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0) 72%)" }}
+            />
+
+            <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-10">
+              <div
+                className="rounded-[28px] p-4 md:p-5"
+                style={{
+                  background: "linear-gradient(155deg, rgba(255,255,255,0.96) 0%, rgba(242,237,250,0.86) 100%)",
+                  border: "1px solid rgba(234,227,248,0.92)",
+                  boxShadow: "0 14px 30px rgba(100,78,158,0.18), 0 1px 0 rgba(255,255,255,0.95) inset",
+                }}
+              >
+                <img
+                  src="/destiny.png"
+                  alt="Destiny Day"
+                  draggable={false}
+                  className="w-44 h-44 md:w-56 md:h-56 object-contain rounded-2xl"
+                  style={{ opacity: 0.88 }}
+                />
+              </div>
+
+              <div className="min-w-0 flex-1 text-center md:text-left pt-1 md:pt-4">
+                <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
+                  <span
+                    className="inline-flex rounded-full px-4 py-1 text-[12px] font-semibold tracking-[0.18em] uppercase"
+                    style={{
+                      color: "#a0672d",
+                      border: "1px solid rgba(186,135,85,0.42)",
+                      background: "linear-gradient(90deg, rgba(247,220,189,0.55) 0%, rgba(247,220,189,0.18) 100%)",
+                    }}
+                  >
+                    Tennis Club · 2026.03.13
+                  </span>
+                  <span className="hidden md:block h-px w-16" style={{ background: "rgba(160,109,61,0.4)" }} />
+                </div>
+
+                <h1 className="leading-none">
+                  <span
+                    className="text-[3.15rem] md:text-[4.35rem] font-bold tracking-[-0.04em]"
+                    style={{
+                      color: "#4f2b8d",
+                      fontFamily: "Georgia, Times New Roman, serif",
+                      textShadow: "0 10px 18px rgba(79,43,141,0.16)",
+                    }}
+                  >
+                    Destiny
+                  </span>
+                  <span
+                    className="text-[3.15rem] md:text-[4.35rem] font-semibold tracking-[-0.04em]"
+                    style={{
+                      color: "#c38e52",
+                      fontFamily: "Georgia, Times New Roman, serif",
+                    }}
+                  >
+                    DAY
+                  </span>
+                </h1>
+
+                <div className="mt-2 flex items-center justify-center md:justify-start gap-3">
+                  <span className="h-[3px] w-16 rounded-full" style={{ background: "linear-gradient(90deg, #a76735 0%, rgba(167,103,53,0.2) 100%)" }} />
+                  <p className="text-[1.05rem] font-semibold tracking-[0.22em]" style={{ color: "#a76735" }}>
+                    대시보드 입장
+                  </p>
+                  <span className="h-[3px] w-16 rounded-full" style={{ background: "linear-gradient(90deg, rgba(167,103,53,0.2) 0%, #a76735 100%)" }} />
+                </div>
+
+                <p className="mt-2 text-[0.95rem] font-semibold tracking-[0.16em] uppercase" style={{ color: "#7f6ba8" }}>
+                  Photography Edition
+                </p>
+              </div>
             </div>
+          </div>
 
-            <form onSubmit={handleLogin} className="space-y-4">
+          <div className="px-4 sm:px-5 md:px-12 py-9 md:py-10 bg-[rgba(255,255,255,0.72)]">
+            <form onSubmit={handleLogin} className="max-w-[700px] mx-auto space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-1">이름을 입력해 입장해 주세요</label>
+                <label className="block text-[1.7rem] md:text-[1.8rem] font-semibold mb-2" style={{ color: "#6b4fa8" }}>
+                  이름
+                </label>
                 <input
-                  className="w-full rounded-2xl border border-slate-700 bg-slate-900/60 px-4 py-3 text-sm text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400/70 transition"
-                  placeholder="예: 김테니스"
+                  className="w-full rounded-[22px] px-7 py-4 md:py-5 text-[1.2rem] md:text-[1.3rem] focus:outline-none"
+                  style={{
+                    background:
+                      "linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(247,244,252,0.94) 100%)",
+                    color: "#5a3a91",
+                    border: "3px solid rgba(114,88,174,0.72)",
+                    boxShadow: "0 6px 16px rgba(114,88,174,0.17), 0 1px 0 rgba(255,255,255,0.92) inset",
+                  }}
+                  placeholder="예: 임창용"
                   value={loginName}
                   onChange={(e) => setLoginName(e.target.value)}
+                  autoFocus
                 />
-                <p className="mt-1 text-xs text-slate-400">최대 35명까지 동시에 접속 가능합니다.</p>
               </div>
 
               <button
                 type="submit"
-                className="w-full inline-flex items-center justify-center rounded-2xl bg-sky-400 hover:bg-sky-300 text-slate-900 font-semibold py-3 text-sm shadow-lg shadow-sky-500/40 transition"
+                className="w-full rounded-[20px] py-4 text-[2rem] font-bold transition active:scale-[0.99]"
+                style={{
+                  color: "#d5a56d",
+                  background: "linear-gradient(180deg, #47278a 0%, #3c1f79 100%)",
+                  boxShadow: "0 9px 18px rgba(56,33,112,0.35), 0 1px 0 rgba(255,255,255,0.15) inset",
+                }}
               >
-                코트로 입장하기
+                입장하기
               </button>
             </form>
+
+            <p className="mt-8 text-center text-[0.85rem] md:text-[0.9rem]" style={{ color: "#9b8db8" }}>
+              최대 35명 동시 접속 · 이름만 입력하면 됩니다
+            </p>
           </div>
         </div>
       </div>
     );
   }
 
-  const rounds = Array.from(new Set(matches.map((m) => m.round))).sort();
+  const matchMap = new Map(matches.map((m) => [`${m.round}-${m.court}`, m] as const));
+  const totalDuration = SCHEDULE_ROWS.reduce((sum, row) => sum + row.duration, 0);
+
+  const scoreTotals = matches.reduce(
+    (acc, match) => {
+      if (match.court === 1) {
+        acc.court1A += match.scoreA;
+        acc.court1B += match.scoreB;
+      }
+      if (match.court === 2) {
+        acc.court2A += match.scoreA;
+        acc.court2B += match.scoreB;
+      }
+      return acc;
+    },
+    { court1A: 0, court1B: 0, court2A: 0, court2B: 0 }
+  );
+
+  const renderCourtCell = (match: Match | undefined, court: 1 | 2) => {
+    if (!match) {
+      return (
+        <>
+          <td className="border px-3 py-1.5 text-xs" style={{ borderColor: "rgba(167,139,250,0.35)", background: "rgba(243,240,252,0.5)", color: "#9f8ac8" }}>미정</td>
+          <td className="border px-3 py-1.5 text-xs" style={{ borderColor: "rgba(167,139,250,0.35)", background: "rgba(243,240,252,0.5)", color: "#9f8ac8" }}>미정</td>
+          <td className="border px-2 py-1.5 text-center text-xs" style={{ borderColor: "rgba(167,139,250,0.35)", background: "rgba(255,255,255,0.55)", color: "#9f8ac8" }}>-</td>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <td className="border px-3 py-1.5 text-sm font-medium" style={{ borderColor: "rgba(167,139,250,0.35)", background: "rgba(186,230,253,0.25)", color: "#0c4a6e" }}>
+          {match.teamAPlayer1}, {match.teamAPlayer2}
+        </td>
+        <td className="border px-3 py-1.5 text-sm font-medium" style={{ borderColor: "rgba(167,139,250,0.35)", background: "rgba(254,243,199,0.35)", color: "#78350f" }}>
+          {match.teamBPlayer1}, {match.teamBPlayer2}
+        </td>
+        <td className="border px-2 py-1.5 text-center" style={{ borderColor: "rgba(167,139,250,0.35)", background: "rgba(255,255,255,0.55)" }}>
+          <div className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-slate-50 p-1">
+            <input
+              type="number"
+              min={0}
+              aria-label={`${match.round} ${court}코트 청팀 점수`}
+              className="w-10 rounded-md border border-slate-300 bg-white px-1 py-1 text-center text-xs"
+              value={match.scoreA}
+              onChange={(e) => handleScoreChange(match, "scoreA", e.target.value)}
+              onBlur={() => handleScoreBlur(match)}
+            />
+            <span className="text-xs font-semibold text-slate-500">:</span>
+            <input
+              type="number"
+              min={0}
+              aria-label={`${match.round} ${court}코트 홍팀 점수`}
+              className="w-10 rounded-md border border-slate-300 bg-white px-1 py-1 text-center text-xs"
+              value={match.scoreB}
+              onChange={(e) => handleScoreChange(match, "scoreB", e.target.value)}
+              onBlur={() => handleScoreBlur(match)}
+            />
+          </div>
+        </td>
+      </>
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
-      <header className="relative overflow-hidden border-b border-slate-800 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-950">
-        <div className="absolute inset-0 opacity-50 mix-blend-screen">
-          <div className="h-full w-full bg-[radial-gradient(circle_at_0_0,rgba(56,189,248,0.26),transparent_55%),radial-gradient(circle_at_100%_0,rgba(45,212,191,0.2),transparent_55%)]" />
-        </div>
-        <div className="relative max-w-6xl mx-auto px-6 py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div className="min-h-screen text-slate-900" style={{ background: "linear-gradient(160deg, #ede9f6 0%, #e8e3f4 45%, #e2ddf0 100%)" }}>
+      <header className="border-b" style={{ borderColor: "rgba(167,139,250,0.35)", background: "linear-gradient(135deg, rgba(255,255,255,0.72) 0%, rgba(237,233,248,0.82) 100%)", backdropFilter: "blur(8px)" }}>
+        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
-            <p className="text-xs tracking-[0.2em] uppercase text-sky-300/80">Tennis Club Event</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-              Destiny Doubles Dashboard
-            </h1>
-            <p className="mt-1 text-sm text-slate-200/80">
-              오늘의 경기 진행 상황과 마니또를 한 눈에 확인하세요.
-            </p>
+            <p className="text-[10px] tracking-[0.2em] uppercase font-semibold" style={{ color: "#9b76e8" }}>Tennis Club Event</p>
+            <h1 className="mt-0.5 text-xl font-bold tracking-tight" style={{ color: "#3d2c6b" }}>Destiny Day Dashboard</h1>
+            <p className="mt-0.5 text-xs" style={{ color: "#7f6ba8" }}>이미지형 일정표 기준으로 경기 진행 현황을 관리합니다.</p>
           </div>
-          <div className="flex flex-col items-end gap-1 text-sm">
-            <span className="px-3 py-1 rounded-full bg-slate-900/70 border border-slate-700 text-slate-100">
-              입장한 플레이어: <span className="font-semibold text-sky-300">{me}</span>
+          <div className="flex flex-col items-start md:items-end gap-1.5 text-sm">
+            <span className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium" style={{ background: "rgba(255,255,255,0.7)", border: "1px solid rgba(196,181,253,0.6)", color: "#3d2c6b" }}>
+              입장한 플레이어: <span className="ml-1 font-bold" style={{ color: "#7c5cbf" }}>{me}</span>
             </span>
+            <button
+              onClick={handleReenter}
+              className="text-xs px-3 py-1 rounded-full transition"
+              style={{ background: "rgba(255,255,255,0.5)", border: "1px solid rgba(196,181,253,0.5)", color: "#7f6ba8" }}
+            >
+              재입장하기 (이름 변경)
+            </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-6 space-y-8">
-        <section className="grid md:grid-cols-3 gap-6">
-          <div className="md:col-span-2 rounded-3xl border border-slate-800 bg-slate-900/70 backdrop-blur-xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold tracking-wide text-slate-200 uppercase">
-                경기 대진표
-              </h2>
-            </div>
-            <div className="space-y-4">
-              {rounds.map((round) => (
-                <div key={round}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-400">
-                      {round}
-                    </span>
+      <main className="max-w-7xl mx-auto px-4 py-4 space-y-4">
+        <section className="rounded-2xl overflow-hidden shadow-sm" style={{ border: "1px solid rgba(196,181,253,0.5)" }}>
+          <div className="px-4 py-2.5 border-b" style={{ background: "linear-gradient(90deg, rgba(124,92,191,0.18) 0%, rgba(155,118,232,0.08) 100%)", borderColor: "rgba(196,181,253,0.4)" }}>
+            <h2 className="text-sm font-bold" style={{ color: "#3d2c6b" }}>팀 명단 + 합산</h2>
+          </div>
+          <div className="grid md:grid-cols-2" style={{ background: "rgba(255,255,255,0.6)" }}>
+            {TEAM_ROSTER.map((group, i) => {
+              const total = i === 0
+                ? scoreTotals.court1A + scoreTotals.court2A
+                : scoreTotals.court1B + scoreTotals.court2B;
+              return (
+                <div
+                  key={group.team}
+                  className={`p-3 flex items-center gap-3 ${
+                    i === 0 ? "border-b md:border-b-0 md:border-r" : ""
+                  }`}
+                  style={{ borderColor: "rgba(196,181,253,0.4)" }}
+                >
+                  <div
+                    className={`flex-shrink-0 w-14 h-14 rounded-xl flex flex-col items-center justify-center font-bold text-white shadow ${
+                      group.team === "청팀" ? "bg-sky-500" : "bg-amber-500"
+                    }`}
+                  >
+                    <span className="text-[10px]">{group.team}</span>
+                    <span className="text-xl leading-none">{total}</span>
+                    <span className="text-[9px] opacity-80">점</span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {matches
-                      .filter((m) => m.round === round)
-                      .map((m) => (
-                        <div
-                          key={m.id}
-                          className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-3 flex flex-col gap-2"
-                        >
-                          <div className="flex items-center justify-between text-xs text-slate-400">
-                            <span>코트 {m.court}</span>
-                            <span className="rounded-full border border-slate-700 px-2 py-0.5">
-                              더블스
-                            </span>
-                          </div>
-                          <div className="text-xs text-slate-300">
-                            <div className="flex justify-between">
-                              <span className="font-medium text-sky-300">
-                                {m.teamAPlayer1}, {m.teamAPlayer2}
-                              </span>
-                              <input
-                                type="number"
-                                min={0}
-                                className="w-14 rounded-xl bg-slate-800 border border-slate-700 text-center text-sm"
-                                value={m.scoreA}
-                                onChange={(e) => handleScoreChange(m, "scoreA", e.target.value)}
-                                onBlur={() => handleScoreBlur(m)}
-                              />
-                            </div>
-                            <div className="flex justify-between mt-1">
-                              <span className="font-medium text-emerald-300">
-                                {m.teamBPlayer1}, {m.teamBPlayer2}
-                              </span>
-                              <input
-                                type="number"
-                                min={0}
-                                className="w-14 rounded-xl bg-slate-800 border border-slate-700 text-center text-sm"
-                                value={m.scoreB}
-                                onChange={(e) => handleScoreChange(m, "scoreB", e.target.value)}
-                                onBlur={() => handleScoreBlur(m)}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                  <div className="flex flex-wrap gap-1">
+                    {group.members.map((name) => (
+                      <span
+                        key={name}
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
+                          group.team === "청팀"
+                            ? "bg-sky-50 border-sky-200 text-sky-800"
+                            : "bg-amber-50 border-amber-200 text-amber-800"
+                        }`}
+                      >
+                        {name}
+                      </span>
+                    ))}
                   </div>
                 </div>
-              ))}
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <div className="rounded-2xl overflow-hidden shadow-sm" style={{ border: "1px solid rgba(196,181,253,0.5)" }}>
+            <div className="px-4 py-2.5 border-b flex items-center justify-between" style={{ background: "linear-gradient(90deg, rgba(124,92,191,0.18) 0%, rgba(155,118,232,0.08) 100%)", borderColor: "rgba(196,181,253,0.4)" }}>
+              <h2 className="text-sm font-bold" style={{ color: "#3d2c6b" }}>경기 대진표</h2>
+              <p className="text-xs" style={{ color: "#7f6ba8" }}>시간표 기준 / 점수 즉시 저장</p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1080px] border-collapse text-sm" style={{ background: "rgba(255,255,255,0.6)" }}>
+                <thead>
+                  <tr style={{ background: "rgba(124,92,191,0.18)", color: "#3d2c6b" }}>
+                    <th rowSpan={2} className="border px-2 py-1.5 w-48" style={{ borderColor: "rgba(167,139,250,0.4)" }}>시간</th>
+                    <th rowSpan={2} className="border px-2 py-1.5 w-24" style={{ borderColor: "rgba(167,139,250,0.4)" }}>경기시간(분)</th>
+                    <th colSpan={3} className="border px-2 py-1.5" style={{ borderColor: "rgba(167,139,250,0.4)" }}>1코트</th>
+                    <th colSpan={3} className="border px-2 py-1.5" style={{ borderColor: "rgba(167,139,250,0.4)" }}>2코트</th>
+                  </tr>
+                  <tr style={{ background: "rgba(155,118,232,0.1)", color: "#4a3580" }}>
+                    <th className="border px-2 py-1.5" style={{ borderColor: "rgba(167,139,250,0.4)" }}>청팀</th>
+                    <th className="border px-2 py-1.5" style={{ borderColor: "rgba(167,139,250,0.4)" }}>홍팀</th>
+                    <th className="border px-2 py-1.5" style={{ borderColor: "rgba(167,139,250,0.4)" }}>점수</th>
+                    <th className="border px-2 py-1.5" style={{ borderColor: "rgba(167,139,250,0.4)" }}>청팀</th>
+                    <th className="border px-2 py-1.5" style={{ borderColor: "rgba(167,139,250,0.4)" }}>홍팀</th>
+                    <th className="border px-2 py-1.5" style={{ borderColor: "rgba(167,139,250,0.4)" }}>점수</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {SCHEDULE_ROWS.map((row) => {
+                    if (row.type === "event") {
+                      return (
+                        <tr key={`${row.time}-${row.label}`}>
+                          <td className="border px-3 py-2 text-center font-semibold" style={{ borderColor: "rgba(167,139,250,0.45)", background: "rgba(221,214,254,0.55)", color: "#3d2c6b" }}>
+                            {row.label}
+                            <div className="mt-0.5 text-xs font-bold" style={{ color: "#6d4db4" }}>{row.time}</div>
+                          </td>
+                          <td className="border px-3 py-2 text-center font-semibold" style={{ borderColor: "rgba(167,139,250,0.45)", background: "rgba(221,214,254,0.45)", color: "#4a3580" }}>{row.duration}</td>
+                          <td colSpan={6} className="border px-3 py-2 text-center font-semibold" style={{ borderColor: "rgba(167,139,250,0.45)", background: "rgba(221,214,254,0.45)", color: "#4a3580" }}>
+                            {row.label}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    const court1 = matchMap.get(`${row.round}-1`);
+                    const court2 = matchMap.get(`${row.round}-2`);
+
+                    return (
+                      <tr key={row.round}>
+                        <td className="border px-3 py-2 text-center font-semibold" style={{ borderColor: "rgba(167,139,250,0.35)", background: "rgba(209,250,229,0.35)", color: "#1e3a2f" }}>
+                          {row.time} ({row.round})
+                        </td>
+                        <td className="border px-3 py-2 text-center font-semibold" style={{ borderColor: "rgba(167,139,250,0.35)", background: "rgba(243,240,252,0.6)" }}>{row.duration}</td>
+                        {renderCourtCell(court1, 1)}
+                        {renderCourtCell(court2, 2)}
+                      </tr>
+                    );
+                  })}
+                  <tr className="font-semibold" style={{ background: "rgba(124,92,191,0.1)" }}>
+                    <td className="border px-3 py-2 text-center" style={{ borderColor: "rgba(167,139,250,0.4)", color: "#4a3580" }}>총 경기시간</td>
+                    <td className="border px-3 py-2 text-center" style={{ borderColor: "rgba(167,139,250,0.4)" }}>{totalDuration}</td>
+                    <td colSpan={2} className="border px-3 py-2 text-center" style={{ borderColor: "rgba(167,139,250,0.4)" }}>합산</td>
+                    <td className="border px-3 py-2 text-center text-sm" style={{ borderColor: "rgba(167,139,250,0.4)" }}>
+                      {scoreTotals.court1A} : {scoreTotals.court1B}
+                    </td>
+                    <td colSpan={2} className="border px-3 py-2 text-center" style={{ borderColor: "rgba(167,139,250,0.4)" }}>합산</td>
+                    <td className="border px-3 py-2 text-center text-sm" style={{ borderColor: "rgba(167,139,250,0.4)" }}>
+                      {scoreTotals.court2A} : {scoreTotals.court2B}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/70 backdrop-blur-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-400">
-                  합산 결과
-                </h2>
-                <button
-                  onClick={loadSummary}
-                  className="text-xs px-2 py-1 rounded-xl border border-slate-700 hover:border-sky-400 text-slate-200"
-                >
-                  새로 고침
-                </button>
-              </div>
-              <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
-                {summary.map((row, idx) => (
-                  <div
-                    key={row.name}
-                    className="flex items-center justify-between text-xs rounded-2xl px-3 py-2 bg-slate-900 border border-slate-800"
+          <div className="rounded-2xl p-4 shadow-sm" style={{ background: "rgba(255,255,255,0.65)", border: "1px solid rgba(196,181,253,0.5)" }}>
+            <div className="flex items-baseline gap-2 mb-3">
+              <h2 className="text-sm font-bold" style={{ color: "#3d2c6b" }}>오늘의 마니또 투표</h2>
+              <span className="text-xs" style={{ color: "#9f8ac8" }}>비밀 투표 · 언제든 변경 가능</span>
+              <div className="ml-auto flex items-center gap-2">
+                {myVote && <span className="text-xs font-semibold" style={{ color: "#7c5cbf" }}>내 투표: {myVote}</span>}
+                {me === "임창용" && (
+                  <button
+                    type="button"
+                    onClick={handleResetVotes}
+                    className="rounded-lg px-2.5 py-1 text-xs font-semibold transition"
+                    style={{ border: "1px solid rgba(239,68,68,0.4)", background: "rgba(254,242,242,0.8)", color: "#b91c1c" }}
                   >
-                    <div>
-                      <span className="text-slate-200 font-medium">
-                        {idx + 1}. {row.name}
-                      </span>
-                      <span className="ml-2 text-slate-400">
-                        {row.played}경기 • {row.wins}승 {row.draws}무 {row.losses}패
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                    초기화
+                  </button>
+                )}
               </div>
             </div>
-
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/70 backdrop-blur-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-400">
-                  오늘의 마니또 투표
-                </h2>
-              </div>
-              <div className="space-y-2">
-                <input
-                  className="w-full rounded-2xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-400"
-                  placeholder="마니또로 뽑을 사람 이름"
-                  value={voteTarget}
-                  onChange={(e) => setVoteTarget(e.target.value)}
-                />
-                <button
-                  onClick={handleVote}
-                  className="w-full text-xs font-semibold rounded-2xl bg-emerald-400 text-slate-900 py-2 hover:bg-emerald-300 transition"
-                >
-                  비밀 투표하기
-                </button>
-              </div>
-              <div className="pt-2 border-t border-slate-800">
-                <p className="text-[11px] text-slate-400 mb-1">현재 득표 현황</p>
-                <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1.5">
+              {TEAM_ROSTER.flatMap((group) =>
+                group.members
+                  .filter((name) => name !== me)
+                  .map((name) => {
+                    const checked = voteTarget === name;
+                    return (
+                      <label
+                        key={name}
+                        className="flex items-center gap-2 cursor-pointer rounded-xl px-3 py-2 transition"
+                        style={checked
+                          ? { border: "1px solid rgba(124,92,191,0.7)", background: "rgba(237,233,246,0.9)", boxShadow: "0 1px 4px rgba(124,92,191,0.15)" }
+                          : { border: "1px solid rgba(196,181,253,0.4)", background: "rgba(255,255,255,0.5)" }
+                        }
+                      >
+                        <input
+                          type="radio"
+                          name="voteTarget"
+                          value={name}
+                          checked={checked}
+                          onChange={() => handleVote(name)}
+                          className="accent-violet-600"
+                        />
+                        <span
+                          className={`text-sm font-medium ${
+                            group.team === "청팀" ? "text-sky-800" : "text-amber-800"
+                          }`}
+                        >
+                          {name}
+                        </span>
+                        <span className="ml-auto text-[10px] text-slate-400">{group.team}</span>
+                      </label>
+                    );
+                  })
+              )}
+            </div>
+            {voteSummary.length > 0 && (
+              <div className="mt-3 pt-3" style={{ borderTop: "1px solid rgba(196,181,253,0.35)" }}>
+                <p className="text-xs mb-1.5" style={{ color: "#9f8ac8" }}>현재 득표 현황</p>
+                <div className="flex flex-wrap gap-1.5">
                   {voteSummary.map((v) => (
-                    <div
+                    <span
                       key={v.targetName}
-                      className="flex items-center justify-between text-xs rounded-xl bg-slate-900 border border-slate-800 px-3 py-1.5"
+                      className="inline-flex items-center gap-1 text-xs rounded-full px-3 py-0.5"
+                      style={{ background: "rgba(237,233,246,0.9)", border: "1px solid rgba(167,139,250,0.45)", color: "#4a3580" }}
                     >
                       <span>{v.targetName}</span>
-                      <span className="text-emerald-300 font-semibold">{v.count}표</span>
-                    </div>
+                      <span className="font-bold" style={{ color: "#7c5cbf" }}>{v.count}표</span>
+                    </span>
                   ))}
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </section>
       </main>

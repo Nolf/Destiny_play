@@ -4,6 +4,8 @@ import morgan from "morgan";
 import session from "express-session";
 import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
+import path from "path";
+import { fileURLToPath } from "url";
 
 dotenv.config();
 
@@ -148,6 +150,24 @@ app.post("/api/votes", async (req, res) => {
   }
 });
 
+app.get("/api/votes/me", async (req, res) => {
+  const voterName = req.session.userName;
+  if (!voterName) return res.status(401).json({ message: "not logged in" });
+  const vote = await prisma.vote.findUnique({ where: { voterName } });
+  res.json({ targetName: vote?.targetName ?? null });
+});
+
+app.post("/api/votes/reset", async (req, res) => {
+  const requesterName = req.session.userName;
+  if (!requesterName) return res.status(401).json({ message: "not logged in" });
+  if (requesterName !== "임창용") {
+    return res.status(403).json({ message: "forbidden" });
+  }
+
+  const result = await prisma.vote.deleteMany();
+  res.json({ deletedCount: result.count });
+});
+
 app.get("/api/votes/summary", async (_req, res) => {
   const votes = await prisma.vote.groupBy({
     by: ["targetName"],
@@ -166,6 +186,13 @@ app.get("/api/votes/summary", async (_req, res) => {
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
   res.status(500).json({ message: "internal server error" });
+});
+
+// 클라이언트 빌드 파일 서빙 (프로덕션)
+const clientDist = path.join(__dirname, "../../client/dist");
+app.use(express.static(clientDist));
+app.get(/^(?!\/api).*/, (_req, res) => {
+  res.sendFile(path.join(clientDist, "index.html"));
 });
 
 const PORT = process.env.PORT || 4000;

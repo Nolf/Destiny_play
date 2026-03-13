@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" width="1200" height="600">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a5c2e;stop-opacity:1" />
+      <stop offset="60%" style="stop-color:#226b36;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0f3d1e;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="courtGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2d8046;stop-opacity:0.7" />
+      <stop offset="100%" style="stop-color:#1a5c2e;stop-opacity:0.7" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#f59e0b" />
+      <stop offset="50%" style="stop-color:#fde68a" />
+      <stop offset="100%" style="stop-color:#f59e0b" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="600" fill="url(#bgGrad)"/>
+
+  <!-- Court outline lines (decorative) -->
+  <!-- Outer court -->
+  <rect x="120" y="80" width="960" height="440" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="3"/>
+  <!-- Service boxes -->
+  <line x1="600" y1="80" x2="600" y2="520" stroke="rgba(255,255,255,0.15)" stroke-width="2"/>
+  <line x1="120" y1="220" x2="1080" y2="220" stroke="rgba(255,255,255,0.12)" stroke-width="2"/>
+  <line x1="120" y1="380" x2="1080" y2="380" stroke="rgba(255,255,255,0.12)" stroke-width="2"/>
+  <!-- Center service line -->
+  <line x1="600" y1="220" x2="600" y2="380" stroke="rgba(255,255,255,0.12)" stroke-width="2"/>
+  <!-- Net -->
+  <line x1="120" y1="300" x2="1080" y2="300" stroke="rgba(255,255,255,0.35)" stroke-width="4" stroke-dasharray="8,6"/>
+  <circle cx="600" cy="300" r="8" fill="rgba(255,255,255,0.3)"/>
+
+  <!-- Subtle court fill -->
+  <rect x="122" y="82" width="956" height="436" fill="url(#courtGrad)" opacity="0.3"/>
+
+  <!-- Decorative circle backdrop for title -->
+  <ellipse cx="600" cy="290" rx="340" ry="220" fill="rgba(0,0,0,0.25)"/>
+
+  <!-- Top accent bar -->
+  <rect x="0" y="0" width="1200" height="6" fill="url(#goldGrad)"/>
+  <!-- Bottom accent bar -->
+  <rect x="0" y="594" width="1200" height="6" fill="url(#goldGrad)"/>
+
+  <!-- Racket silhouette left -->
+  <g transform="translate(185,240) rotate(-30)" opacity="0.18">
+    <ellipse cx="0" cy="0" rx="38" ry="52" fill="none" stroke="white" stroke-width="5"/>
+    <line x1="0" y1="52" x2="0" y2="120" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <line x1="-20" y1="20" x2="20" y2="20" stroke="white" stroke-width="2"/>
+    <line x1="-24" y1="0" x2="24" y2="0" stroke="white" stroke-width="2"/>
+    <line x1="-20" y1="-20" x2="20" y2="-20" stroke="white" stroke-width="2"/>
+    <line x1="0" y1="-50" x2="0" y2="50" stroke="white" stroke-width="2"/>
+    <line x1="-15" y1="-50" x2="-15" y2="50" stroke="white" stroke-width="2"/>
+    <line x1="15" y1="-50" x2="15" y2="50" stroke="white" stroke-width="2"/>
+  </g>
+
+  <!-- Racket silhouette right -->
+  <g transform="translate(1015,240) rotate(30)" opacity="0.18">
+    <ellipse cx="0" cy="0" rx="38" ry="52" fill="none" stroke="white" stroke-width="5"/>
+    <line x1="0" y1="52" x2="0" y2="120" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <line x1="-20" y1="20" x2="20" y2="20" stroke="white" stroke-width="2"/>
+    <line x1="-24" y1="0" x2="24" y2="0" stroke="white" stroke-width="2"/>
+    <line x1="-20" y1="-20" x2="20" y2="-20" stroke="white" stroke-width="2"/>
+    <line x1="0" y1="-50" x2="0" y2="50" stroke="white" stroke-width="2"/>
+    <line x1="-15" y1="-50" x2="-15" y2="50" stroke="white" stroke-width="2"/>
+    <line x1="15" y1="-50" x2="15" y2="50" stroke="white" stroke-width="2"/>
+  </g>
+
+  <!-- Tennis ball -->
+  <circle cx="600" cy="148" r="28" fill="#d4f020" filter="url(#shadow)" opacity="0.92"/>
+  <path d="M578,135 Q600,148 622,135" fill="none" stroke="white" stroke-width="2.5"/>
+  <path d="M578,161 Q600,148 622,161" fill="none" stroke="white" stroke-width="2.5"/>
+
+  <!-- Gold label top -->
+  <text x="600" y="208" font-family="Georgia, serif" font-size="15" fill="url(#goldGrad)" text-anchor="middle" letter-spacing="6" filter="url(#glow)">TENNIS CLUB EVENT 2026</text>
+
+  <!-- Main title -->
+  <text x="600" y="278" font-family="Georgia, 'Times New Roman', serif" font-size="72" font-weight="bold" fill="white" text-anchor="middle" filter="url(#shadow)" letter-spacing="2">Destiny</text>
+  <text x="600" y="350" font-family="Georgia, 'Times New Roman', serif" font-size="56" font-weight="bold" fill="url(#goldGrad)" text-anchor="middle" filter="url(#glow)" letter-spacing="4">DOUBLES</text>
+
+  <!-- Divider -->
+  <line x1="380" y1="372" x2="820" y2="372" stroke="url(#goldGrad)" stroke-width="1.5" opacity="0.8"/>
+  <circle cx="600" cy="372" r="4" fill="url(#goldGrad)"/>
+
+  <!-- Date & subtitle -->
+  <text x="600" y="405" font-family="'Helvetica Neue', Arial, sans-serif" font-size="18" fill="rgba(255,255,255,0.85)" text-anchor="middle" letter-spacing="3">2026.03.13  |  Destiny 테니스 동호회</text>
+  <text x="600" y="438" font-family="'Helvetica Neue', Arial, sans-serif" font-size="15" fill="rgba(255,255,255,0.6)" text-anchor="middle" letter-spacing="2">12명 · 6라운드 더블스 · 마니또 투표</text>
+
+  <!-- Bottom team badges -->
+  <rect x="380" y="468" width="170" height="38" rx="19" fill="rgba(56,189,248,0.25)" stroke="rgba(56,189,248,0.6)" stroke-width="1.5"/>
+  <text x="465" y="492" font-family="'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="bold" fill="#7dd3fc" text-anchor="middle" letter-spacing="2">청팀 6명</text>
+  <rect x="650" y="468" width="170" height="38" rx="19" fill="rgba(251,191,36,0.25)" stroke="rgba(251,191,36,0.6)" stroke-width="1.5"/>
+  <text x="735" y="492" font-family="'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="bold" fill="#fde68a" text-anchor="middle" letter-spacing="2">홍팀 6명</text>
+</svg>
