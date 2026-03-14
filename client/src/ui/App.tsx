@@ -37,7 +37,7 @@ const SCHEDULE_ROWS: ScheduleRow[] = [
   { type: "match", round: "R4", time: "12:40 ~ 13:05", duration: 25 },
   { type: "match", round: "R5", time: "13:05 ~ 13:30", duration: 25 },
   { type: "match", round: "R6", time: "13:30 ~ 13:55", duration: 25 },
-  { type: "event", time: "13:55 ~ 14:00", duration: 5, label: "대회시상 및 마무리" },
+  { type: "event", time: "13:55 ~ 14:00", duration: 5, label: "마니또결과 공개 + 마무리" },
 ];
 
 export const App: React.FC = () => {
@@ -92,6 +92,7 @@ export const App: React.FC = () => {
       const data = await res.json();
       setMyVote(data.targetName ?? null);
       if (data.targetName) setVoteTarget(data.targetName);
+      else setVoteTarget("");
     }
   };
 
@@ -134,7 +135,17 @@ export const App: React.FC = () => {
   };
 
   const handleVote = async (target: string) => {
-    if (!target) return;
+    if (!target) {
+      setVoteTarget("");
+      setMyVote(null);
+      await fetch(`${API_BASE}/api/votes/me`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      await loadVoteSummary();
+      return;
+    }
+
     setVoteTarget(target);
     setMyVote(target);
     await fetch(`${API_BASE}/api/votes`, {
@@ -146,12 +157,63 @@ export const App: React.FC = () => {
     await loadVoteSummary();
   };
 
-  const handleResetVotes = async () => {
-    const res = await fetch(`${API_BASE}/api/votes/reset`, {
+  const postResetVotes = async (adminKey?: string) => {
+    const headers: Record<string, string> = {};
+    if (adminKey) {
+      headers["x-admin-reset-key"] = adminKey;
+    }
+
+    return fetch(`${API_BASE}/api/votes/reset`, {
       method: "POST",
       credentials: "include",
+      headers,
     });
-    if (!res.ok) return;
+  };
+
+  const handleResetVotes = async () => {
+    const resetKeyStorage = "destiny_admin_reset_key";
+    const savedKey = window.sessionStorage.getItem(resetKeyStorage) ?? "";
+    let failureMessage = "";
+
+    let res = await postResetVotes(savedKey || undefined);
+
+    if (res.status === 403) {
+      try {
+        const data = await res.json();
+        failureMessage = data?.message ?? "";
+      } catch {
+        failureMessage = "forbidden";
+      }
+
+      if (failureMessage === "invalid admin key") {
+        const entered = window.prompt("관리자 초기화 키를 입력해 주세요.")?.trim() ?? "";
+        if (!entered) return;
+
+        window.sessionStorage.setItem(resetKeyStorage, entered);
+        res = await postResetVotes(entered);
+
+        if (!res.ok) {
+          failureMessage = "";
+        }
+      }
+    }
+
+    if (!res.ok) {
+      if (!failureMessage) {
+        try {
+          const data = await res.json();
+          failureMessage = data?.message ?? "";
+        } catch {
+          failureMessage = "failed to reset votes";
+        }
+      }
+
+      if (failureMessage === "invalid admin key") {
+        window.sessionStorage.removeItem(resetKeyStorage);
+      }
+      window.alert(`초기화 실패: ${failureMessage || "권한을 확인해 주세요."}`);
+      return;
+    }
 
     setVoteTarget("");
     setMyVote(null);
@@ -401,7 +463,7 @@ export const App: React.FC = () => {
           <div>
             <p className="text-[10px] tracking-[0.2em] uppercase font-semibold" style={{ color: "#9b76e8" }}>Tennis Club Event</p>
             <h1 className="mt-0.5 text-xl font-bold tracking-tight" style={{ color: "#3d2c6b" }}>Destiny Day Dashboard</h1>
-            <p className="mt-0.5 text-xs" style={{ color: "#7f6ba8" }}>이미지형 일정표 기준으로 경기 진행 현황을 관리합니다.</p>
+            <p className="mt-0.5 text-xs" style={{ color: "#7f6ba8" }}>서로를 배려해주시고 , 즐테 위주로 진행할게요!!</p>
           </div>
           <div className="flex flex-col items-start md:items-end gap-1.5 text-sm">
             <span className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium" style={{ background: "rgba(255,255,255,0.7)", border: "1px solid rgba(196,181,253,0.6)", color: "#3d2c6b" }}>
@@ -557,6 +619,24 @@ export const App: React.FC = () => {
               </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1.5">
+              <label
+                className="flex items-center gap-2 cursor-pointer rounded-xl px-3 py-2 transition"
+                style={voteTarget === ""
+                  ? { border: "1px solid rgba(124,92,191,0.7)", background: "rgba(237,233,246,0.9)", boxShadow: "0 1px 4px rgba(124,92,191,0.15)" }
+                  : { border: "1px solid rgba(196,181,253,0.4)", background: "rgba(255,255,255,0.5)" }
+                }
+              >
+                <input
+                  type="radio"
+                  name="voteTarget"
+                  value=""
+                  checked={voteTarget === ""}
+                  onChange={() => handleVote("")}
+                  className="accent-violet-600"
+                />
+                <span className="text-sm font-medium text-slate-700">선택안함</span>
+                <span className="ml-auto text-[10px] text-slate-400">투표취소</span>
+              </label>
               {TEAM_ROSTER.flatMap((group) =>
                 group.members
                   .filter((name) => name !== me)

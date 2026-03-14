@@ -4,23 +4,67 @@ import morgan from "morgan";
 import session from "express-session";
 import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import path from "path";
-import { fileURLToPath } from "url";
 
 dotenv.config();
 
 const app = express();
 const prisma = new PrismaClient();
 
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+const isProduction = process.env.NODE_ENV === "production";
+const sessionSecret = process.env.SESSION_SECRET || "change-this-session-secret";
+const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:5173,http://localhost:4000")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+const adminResetKey = process.env.ADMIN_RESET_KEY;
+
+if (process.env.TRUST_PROXY === "1") {
+  app.set("trust proxy", 1);
+}
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  })
+);
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(express.json({ limit: "20kb" }));
 app.use(morgan("dev"));
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+const loginLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api", apiLimiter);
 
 app.use(
   session({
-    secret: "tennis-event-secret",
+    name: "destiny.sid",
+    secret: sessionSecret,
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: isProduction,
+      maxAge: 12 * 60 * 60 * 1000,
+    },
   })
 );
 
@@ -31,7 +75,7 @@ declare module "express-session" {
 }
 
 // 로그인: 이름만으로 세션에 저장
-app.post("/api/login", async (req, res) => {
+app.post("/api/login", loginLimiter, async (req, res) => {
   const { name } = req.body as { name?: string };
   if (!name) {
     return res.status(400).json({ message: "name is required" });
@@ -157,11 +201,25 @@ app.get("/api/votes/me", async (req, res) => {
   res.json({ targetName: vote?.targetName ?? null });
 });
 
+app.delete("/api/votes/me", async (req, res) => {
+  const voterName = req.session.userName;
+  if (!voterName) return res.status(401).json({ message: "not logged in" });
+
+  await prisma.vote.deleteMany({ where: { voterName } });
+  res.status(204).end();
+});
+
 app.post("/api/votes/reset", async (req, res) => {
   const requesterName = req.session.userName;
   if (!requesterName) return res.status(401).json({ message: "not logged in" });
   if (requesterName !== "임창용") {
     return res.status(403).json({ message: "forbidden" });
+  }
+  if (adminResetKey) {
+    const key = req.header("x-admin-reset-key");
+    if (key !== adminResetKey) {
+      return res.status(403).json({ message: "invalid admin key" });
+    }
   }
 
   const result = await prisma.vote.deleteMany();
