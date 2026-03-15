@@ -40,13 +40,24 @@ const SCHEDULE_ROWS: ScheduleRow[] = [
   { type: "event", time: "13:55 ~ 14:00", duration: 5, label: "마니또결과 공개 + 마무리" },
 ];
 
+const normalizeLoginName = (value: string) => value.replace(/\s+/g, "");
+const MAX_SCORE = 10;
+const SCORE_INPUT_PATTERN = /^\d{0,2}$/;
+
+const normalizeScoreInput = (value: string) => value.replace(/\D+/g, "");
+
 export const App: React.FC = () => {
   const [me, setMe] = useState<string | null>(null);
   const [loginName, setLoginName] = useState("");
+  const [toast, setToast] = useState<{ message: string; tone: "error" | "success" } | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
   const [voteTarget, setVoteTarget] = useState("");
   const [myVote, setMyVote] = useState<string | null>(null);
   const [voteSummary, setVoteSummary] = useState<{ targetName: string; count: number }[]>([]);
+
+  const showToast = (message: string, tone: "error" | "success" = "error") => {
+    setToast({ message, tone });
+  };
 
   useEffect(() => {
     fetch(`${API_BASE}/api/me`, { credentials: "include" })
@@ -76,6 +87,17 @@ export const App: React.FC = () => {
     };
   }, [me]);
 
+  useEffect(() => {
+    if (!toast) return;
+    const toastTimer = window.setTimeout(() => {
+      setToast(null);
+    }, 2200);
+
+    return () => {
+      window.clearTimeout(toastTimer);
+    };
+  }, [toast]);
+
   const loadMatches = async () => {
     const res = await fetch(`${API_BASE}/api/matches`, { credentials: "include" });
     if (res.ok) setMatches(await res.json());
@@ -98,29 +120,48 @@ export const App: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = loginName.trim();
-    if (!trimmed) return;
+    const normalizedName = normalizeLoginName(loginName);
+    if (!normalizedName) {
+      showToast("이름을 입력해 주세요.");
+      return;
+    }
+
     // 서버 응답과 무관하게 먼저 클라이언트 상태를 전환하여 UX와 테스트를 안정적으로 유지합니다.
-    setMe(trimmed);
+    setMe(normalizedName);
     try {
       const res = await fetch(`${API_BASE}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name: trimmed }),
+        body: JSON.stringify({ name: normalizedName }),
       });
       if (!res.ok) {
         // 세션 설정이 실패하면 다시 로그인 화면으로 되돌립니다.
         setMe(null);
+        if (res.status === 403) {
+          showToast("이름을 정확하게 입력하세요!");
+          return;
+        }
+        showToast("로그인에 실패했습니다. 다시 시도해 주세요.");
+      } else {
+        const data = await res.json();
+        if (data?.name) {
+          setMe(data.name);
+        }
       }
     } catch {
       setMe(null);
+      showToast("로그인에 실패했습니다. 다시 시도해 주세요.");
     }
   };
 
   const handleScoreChange = async (match: Match, field: "scoreA" | "scoreB", value: string) => {
-    const num = Number(value);
-    if (Number.isNaN(num) || num < 0) return;
+    const digitsOnly = normalizeScoreInput(value);
+    if (!SCORE_INPUT_PATTERN.test(digitsOnly)) return;
+
+    const num = Number(digitsOnly);
+    if (Number.isNaN(num) || num < 0 || num > MAX_SCORE) return;
+
     const updated = { ...match, [field]: num };
     setMatches((prev) => prev.map((m) => (m.id === match.id ? updated : m)));
   };
@@ -211,7 +252,7 @@ export const App: React.FC = () => {
       if (failureMessage === "invalid admin key") {
         window.sessionStorage.removeItem(resetKeyStorage);
       }
-      window.alert(`초기화 실패: ${failureMessage || "권한을 확인해 주세요."}`);
+      showToast(`초기화 실패: ${failureMessage || "권한을 확인해 주세요."}`);
       return;
     }
 
@@ -220,6 +261,7 @@ export const App: React.FC = () => {
     setVoteSummary([]);
     await loadVoteSummary();
     await loadMyVote();
+    showToast("투표를 초기화했습니다.", "success");
   };
 
   const handleReenter = async () => {
@@ -238,6 +280,19 @@ export const App: React.FC = () => {
         className="relative min-h-screen flex items-start sm:items-center justify-center px-[0.65rem] sm:px-4 pt-0 pb-16 sm:py-10 overflow-hidden"
         style={{ background: "linear-gradient(145deg, #d6cdea 0%, #cec4e5 45%, #c7bddf 100%)" }}
       >
+        {toast && (
+          <div className="fixed top-5 left-1/2 z-50 -translate-x-1/2 px-4">
+            <div
+              className="rounded-xl px-4 py-2 text-sm font-semibold shadow-lg"
+              style={toast.tone === "success"
+                ? { background: "rgba(22,163,74,0.96)", color: "#ecfdf5" }
+                : { background: "rgba(185,28,28,0.96)", color: "#fef2f2" }
+              }
+            >
+              {toast.message}
+            </div>
+          </div>
+        )}
         <div className="pointer-events-none absolute inset-0">
           <div
             className="absolute -top-28 -left-24 w-[28rem] h-[28rem] rounded-full opacity-35"
@@ -365,7 +420,7 @@ export const App: React.FC = () => {
                   }}
                   placeholder="예: 임창용"
                   value={loginName}
-                  onChange={(e) => setLoginName(e.target.value)}
+                  onChange={(e) => setLoginName(normalizeLoginName(e.target.value))}
                   autoFocus
                 />
               </div>
@@ -432,21 +487,25 @@ export const App: React.FC = () => {
         <td className="border px-2 py-1.5 text-center" style={{ borderColor: "rgba(167,139,250,0.35)", background: "rgba(255,255,255,0.55)" }}>
           <div className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-slate-50 p-1">
             <input
-              type="number"
-              min={0}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={2}
               aria-label={`${match.round} ${court}코트 청팀 점수`}
               className="w-10 rounded-md border border-slate-300 bg-white px-1 py-1 text-center text-xs"
-              value={match.scoreA}
+              value={String(match.scoreA)}
               onChange={(e) => handleScoreChange(match, "scoreA", e.target.value)}
               onBlur={() => handleScoreBlur(match)}
             />
             <span className="text-xs font-semibold text-slate-500">:</span>
             <input
-              type="number"
-              min={0}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={2}
               aria-label={`${match.round} ${court}코트 홍팀 점수`}
               className="w-10 rounded-md border border-slate-300 bg-white px-1 py-1 text-center text-xs"
-              value={match.scoreB}
+              value={String(match.scoreB)}
               onChange={(e) => handleScoreChange(match, "scoreB", e.target.value)}
               onBlur={() => handleScoreBlur(match)}
             />
@@ -458,6 +517,19 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen text-slate-900" style={{ background: "linear-gradient(160deg, #ede9f6 0%, #e8e3f4 45%, #e2ddf0 100%)" }}>
+      {toast && (
+        <div className="fixed top-5 left-1/2 z-50 -translate-x-1/2 px-4">
+          <div
+            className="rounded-xl px-4 py-2 text-sm font-semibold shadow-lg"
+            style={toast.tone === "success"
+              ? { background: "rgba(22,163,74,0.96)", color: "#ecfdf5" }
+              : { background: "rgba(185,28,28,0.96)", color: "#fef2f2" }
+            }
+          >
+            {toast.message}
+          </div>
+        </div>
+      )}
       <header className="border-b" style={{ borderColor: "rgba(167,139,250,0.35)", background: "linear-gradient(135deg, rgba(255,255,255,0.72) 0%, rgba(237,233,248,0.82) 100%)", backdropFilter: "blur(8px)" }}>
         <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
