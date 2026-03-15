@@ -133,10 +133,10 @@
 
 예시:
 - `SESSION_SECRET=very-strong-random-secret`
-- `CORS_ORIGINS=http://localhost:5173,http://localhost:4000,http://110.15.56.149:40001`
+- `CORS_ORIGINS=http://localhost:5173,http://localhost:4000
 - `TRUST_PROXY=1`
 - `ADMIN_RESET_KEY=change-this-admin-key`
-- `ALLOWED_LOGIN_NAMES=임창용,이종현,정현석`
+
 
 ### 10. 검증 및 문서 정리 결과
 - 문서 정리: 루트 `README.md`는 진입 문서, `Destiny_play.md`는 상세 기준 문서로 유지

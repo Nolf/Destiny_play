@@ -49,8 +49,6 @@ npm run dev
 - ADMIN_RESET_KEY
 - ALLOWED_LOGIN_NAMES (쉼표로 구분한 허용 이름 목록)
 
-예시:
-- ALLOWED_LOGIN_NAMES=임창용,이종현,정현석
 
 주의:
 - server/.env 변경 후에는 서버를 다시 시작해야 반영됩니다.
